@@ -10,7 +10,7 @@ Install Python, INotebook
 Install [MiniConda](http://conda.pydata.org/miniconda.html) and then:
 
 ```bash
-conda install numpy scipy ipython jupyter matplotlib
+conda install numpy scipy sympy ipython jupyter matplotlib
 jupyter notebook
 ```
 
