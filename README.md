@@ -23,6 +23,12 @@ Install Julia and IJulia
 brew tap caskroom/cask
 brew cask install julia
 
+# On Ubuntu:
+sudo add-apt-repository ppa:staticfloat/juliareleases
+sudo add-apt-repository ppa:staticfloat/julia-deps
+sudo apt-get update
+sudo apt-get install julia
+
 # On Windows:
 # Just install from http://julialang.org/downloads/
 ```
