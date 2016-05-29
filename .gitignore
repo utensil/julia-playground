@@ -64,3 +64,4 @@ target/
 # Customized:
 
 BuildExecutable/dist
+packages/MNIST_data/
