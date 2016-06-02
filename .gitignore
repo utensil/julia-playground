@@ -65,3 +65,5 @@ target/
 
 BuildExecutable/dist
 packages/MNIST_data/
+packages/data*
+packages/checkpoint
