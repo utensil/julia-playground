@@ -68,3 +68,5 @@ packages/MNIST_data/
 packages/data*
 packages/checkpoint
 dl/notMNIST*
+dl/deep-learning-models/
+dl/.DS_Store
