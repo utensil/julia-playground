@@ -18,7 +18,7 @@ from keras.utils.visualize_util import plot
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
 DIGIT_COUNT = 4
@@ -33,7 +33,7 @@ IMAGE_STD_HEIGHT = 200
 CONV1_NB_FILTERS = IMAGE_STD_HEIGHT / 2 + 2
 CONV2_NB_FILTERS = IMAGE_STD_HEIGHT + 2 * 2
 
-def generate_image_sets():
+def generate_image_sets_for_single_digit(singl_digit_index=0):
     captcha = ImageCaptcha()
 
     # print DIGIT_FORMAT_STR
@@ -68,11 +68,53 @@ def generate_image_sets():
         for digit_index in range(0, DIGIT_COUNT):
             digit_labels[digit_index][index] = labels[index][digit_index]
 
-    X, Y_all = digit_image_data, digit_labels[0]
-    X_train, X_test, y_train_num, y_test = train_test_split(X, Y_all, test_size=0.1, random_state=0)
-    y_train = np_utils.to_categorical(y_train_num, CLASS_COUNT)
+    X, Y_all = digit_image_data, digit_labels[singl_digit_index]
+    x_train, x_test, y_train_as_num, y_test = train_test_split(X, Y_all, test_size=0.1, random_state=0)
+    y_train = np_utils.to_categorical(y_train_as_num, CLASS_COUNT)
 
-    return (X_train, y_train, X_test, y_test)
+    return (x_train, y_train, x_test, y_test)
+
+def generate_image_sets_for_multi_digits():
+    captcha = ImageCaptcha()
+
+    # print DIGIT_FORMAT_STR
+    labels = []
+    images = []
+    for i in range(0, SAMPLE_SIZE):
+        digits = 0
+        last_digit = INVALID_DIGIT
+        for j in range(0, DIGIT_COUNT):
+            digit = last_digit
+            while digit == last_digit:
+                digit = random.randint(0, 9)
+            last_digit = digit
+            digits = digits * 10 + digit
+        digits_as_str = DIGIT_FORMAT_STR % digits
+        labels.append(digits_as_str)
+        images.append(captcha.generate_image(digits_as_str))
+
+    digit_labels = list()
+
+    for digit_index in range(0, DIGIT_COUNT):
+        digit_labels.append(np.empty(SAMPLE_SIZE, dtype="int8"))
+
+    digit_image_data = np.empty((SAMPLE_SIZE, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
+
+    for index in range(0, SAMPLE_SIZE):
+        img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
+        # if index < SHOW_SAMPLE_SIZE:
+            # display.display(img)
+        img_arr = np.asarray(img, dtype="float32") / 255.0
+        digit_image_data[index, :, :, :] = np.rollaxis(img_arr, 2)
+        for digit_index in range(0, DIGIT_COUNT):
+            digit_labels[digit_index][index] = labels[index][digit_index]
+
+    X, Y_all = digit_image_data, digit_labels
+    # TODO
+    x_train, x_test, y_train_as_num, y_test = train_test_split(X, Y_all, test_size=0.1, random_state=0)
+    y_train = np_utils.to_categorical(y_train_as_num, CLASS_COUNT)
+
+    return (x_train, y_train, x_test, y_test)
 
 def create_single_digit_model():
     input_layer = Input(name='input', shape=(RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH))
@@ -132,15 +174,52 @@ def create_multi_digit_model(model_file, digit_count=DIGIT_COUNT):
         loss[out_name] = 'categorical_crossentropy'
         outputs.append(output)
 
-    model = Model(input=base_model.input, output=outputs)
+    # model = Model(input=base_model.input, output=outputs)
+    # model.compile(
+    #     optimizer='adadelta',
+    #     loss=loss
+    # )
+
+    merged_output = merge(outputs, mode='concat',
+                    concat_axis=0, output_shape=(digit_count, CLASS_COUNT),
+                    name='out') # concat_axis=
+
+    model = Model(input=base_model.input, output=merged_output)
+    model.compile(
+        optimizer='adadelta',
+        loss={
+            'out': 'categorical_crossentropy',
+        }
+    )
+
     return model
 
-def train(model, X_train, y_train, X_test, y_test, index):
+def inspect_merged_predict(multi_digit_model, x, digit_count=DIGIT_COUNT):
+    intermediate_models = []
+    predicts = {}
+    predicts['out'] = multi_digit_model.predict(x)
+
+    for i in range(0, digit_count):
+        out_name = 'out_%0d' % i
+        model = Model(input=multi_digit_model.input,
+                      output=multi_digit_model.get_layer(out_name).output)
+        model.compile(
+            optimizer='adadelta',
+            loss={
+                out_name: 'categorical_crossentropy',
+            }
+        )
+        predicts[out_name] = model.predict(x)
+
+    return predicts
+
+
+def train(model, x_train, y_train, x_test, y_test, index):
     class ValidateAcc(Callback):
         def on_epoch_end(self, epoch, logs={}):
             print '\n————————————————————————————————————'
             # model.load_weights('tmp/weights.%02d.hdf5' % epoch)
-            r = model.predict(X_test, verbose=0)
+            r = model.predict(x_test, verbose=0)
             y_predict = array([argmax(i) for i in r])
             length = len(y_predict) * 1.0
             acc = sum(y_predict == y_test) / length
@@ -156,7 +235,7 @@ def train(model, X_train, y_train, X_test, y_test, index):
         print "Training based on %s" % model_file
         model.load_weights(model_file)
     model.fit(
-        {'input': X_train}, {'out': y_train},
+        {'input': x_train}, {'out': y_train},
         batch_size=128, nb_epoch=3, callbacks=[check_point, back]
     )
     print '... saving'
@@ -181,11 +260,18 @@ plot(model, 'single_digit_model.png')
 model = create_multi_digit_model(base_model_file, digit_count)
 plot(model, '%d_digit_model.png' % digit_count)
 
+x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
+p = inspect_merged_predict(model, x_test)
+
+for key in p:
+    print key
+    print p[key]
+
 # model = create_single_digit_model()
 #
 # while index < max:
-#     X_train, y_train, X_test, y_test = generate_image_sets()
-#     train(model, X_train, y_train, X_test, y_test, index)
+#     x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
+#     train(model, x_train, y_train, x_test, y_test, index)
 #     index = index + 1
 
 # for index in range(SHOW_SAMPLE_SIZE):
