@@ -14,6 +14,7 @@ from keras.models import Model
 from keras.utils import np_utils
 from keras.layers import merge, Convolution2D, MaxPooling2D, Input, Dense, Dropout, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
+from keras.utils.visualize_util import plot
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
@@ -73,7 +74,7 @@ def generate_image_sets():
 
     return (X_train, y_train, X_test, y_test)
 
-def create_model():
+def create_single_digit_model():
     input_layer = Input(name='input', shape=(RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH))
     h = Convolution2D(22, 5, 5, activation='relu', dim_ordering='th')(input_layer)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
@@ -109,6 +110,29 @@ def create_model():
         }
     )
 
+    return model
+
+def create_multi_digit_model(model_file, digit_count=DIGIT_COUNT):
+    base_model = create_single_digit_model()
+    base_model.load_weights(model_file)
+    # print base_model.layers
+    # print base_model.get_layer(index=6)
+    no_top_model = Model(input=base_model.input, output=base_model.get_layer(index=6).output)
+    # print no_top_model.layers
+    input_layer = base_model.input
+    last_cnn_layer = base_model.get_layer(index=6)
+
+    outputs = []
+    loss = {}
+    for index in range(0, digit_count):
+        h = Dense(256, activation='relu')(last_cnn_layer.output)
+        h = Dropout(0.5)(h)
+        out_name = 'out_%0d' % index
+        output = Dense(CLASS_COUNT, activation='softmax', name=out_name)(h)
+        loss[out_name] = 'categorical_crossentropy'
+        outputs.append(output)
+
+    model = Model(input=base_model.input, output=outputs)
     return model
 
 def train(model, X_train, y_train, X_test, y_test, index):
@@ -150,12 +174,19 @@ if len(sys.argv) > 2:
 else:
     max = 10
 
-model = create_model()
+base_model_file = 'model/model_2_%d.hdf5' % index
+digit_count = DIGIT_COUNT
+model = create_single_digit_model()
+plot(model, 'single_digit_model.png')
+model = create_multi_digit_model(base_model_file, digit_count)
+plot(model, '%d_digit_model.png' % digit_count)
 
-while index < max:
-    X_train, y_train, X_test, y_test = generate_image_sets()
-    train(model, X_train, y_train, X_test, y_test, index)
-    index = index + 1
+# model = create_single_digit_model()
+#
+# while index < max:
+#     X_train, y_train, X_test, y_test = generate_image_sets()
+#     train(model, X_train, y_train, X_test, y_test, index)
+#     index = index + 1
 
 # for index in range(SHOW_SAMPLE_SIZE):
 #     display.display(labels[index])
