@@ -33,7 +33,7 @@ IMAGE_STD_HEIGHT = 200
 CONV1_NB_FILTERS = IMAGE_STD_HEIGHT / 2 + 2
 CONV2_NB_FILTERS = IMAGE_STD_HEIGHT + 2 * 2
 OUT_PUT_NAME_FORMAT = 'out_%02d'
-NB_EPOCH = 3
+NB_EPOCH = 10
 BATCH_SIZE = 128
 
 def generate_image_sets_for_single_digit(singl_digit_index=0):
@@ -158,9 +158,10 @@ def create_single_digit_model():
 
     return model
 
-def create_multi_digit_model(model_file, digit_count=DIGIT_COUNT):
+def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
     base_model = create_single_digit_model()
-    base_model.load_weights(model_file)
+    if model_file != '':
+        base_model.load_weights(model_file)
     # print base_model.layers
     # print base_model.get_layer(index=6)
     no_top_model = Model(input=base_model.input, output=base_model.get_layer(index=6).output)
@@ -246,11 +247,16 @@ def train_single_digit_model(model, x_train, y_train, x_test, y_test, index):
     model.save_weights(save_model_file, overwrite=True)
 
 def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
+    save_model_file = 'model/model_mul_%d.hdf5' % (index + 1)
+
     class ValidateAcc(Callback):
         def on_epoch_end(self, epoch, logs={}):
             print '\n————————————————————————————————————'
             # model.load_weights('tmp/weights.%02d.hdf5' % epoch)
+            length = len(x_test)
             r = model.predict(x_test, verbose=0)
+            # https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
+            is_predict_correct = np.ones(length, dtype="bool")
             # print r[0]
             # print r[0][0]
             # print argmax(r[0][0])
@@ -259,15 +265,22 @@ def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
                 output_name_i = OUT_PUT_NAME_FORMAT % i
                 y_predict_i = array([argmax(j) for j in r[i]])
                 y_test_i = y_test[output_name_i]
-                length = len(y_predict_i) * 1.0
-                acc = sum(y_predict_i == y_test_i) / length
+                is_predict_correct_i = y_predict_i == y_test_i
+                acc = sum(is_predict_correct_i) / (length * 1.0)
                 # print y_predict_i, y_test_i, length, acc
                 print '[%s]:' % output_name_i
                 print '\tSingle picture test accuracy: %2.2f%%' % (acc * 100)
                 print '\tTheoretical accuracy: %2.2f%% ~  %2.2f%%' % ((5*acc-4)*100, pow(acc, 5)*100)
+                is_predict_correct = is_predict_correct & is_predict_correct_i
+            acc_all = sum(is_predict_correct) / (length * 1.0)
+            # print y_predict_i, y_test_i, length, acc
+            print '[out]:'
+            print '\tSingle picture test accuracy: %2.2f%%' % (acc_all * 100)
+            print '\tTheoretical accuracy: %2.2f%% ~  %2.2f%%' % ((5*acc_all-4)*100, pow(acc_all, 5)*100)
             print '————————————————————————————————————'
 
-    check_point = ModelCheckpoint(filepath="tmp/mul.weights.{epoch:02d}.hdf5")
+    # check_point = ModelCheckpoint(filepath="tmp/mul.weights.{epoch:02d}.hdf5")
+    check_point = ModelCheckpoint(filepath=save_model_file)
     back = ValidateAcc()
     print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
     if index >= 0:
@@ -276,10 +289,11 @@ def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
         model.load_weights(model_file)
     model.fit(
         {'input': x_train}, y_train,
-        batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH, callbacks=[check_point, back]
+        batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
+        callbacks=[check_point, back]
     )
     print '... saving'
-    save_model_file = 'model/model_mul_%d.hdf5' % (index + 1)
+
     model.save_weights(save_model_file, overwrite=True)
 
 # print sys.argv[1]
@@ -293,7 +307,7 @@ if len(sys.argv) > 2:
 else:
     max = 1
 
-base_model_file = 'model/model_2_107.hdf5'
+base_model_file = '' # 'model/model_2_107.hdf5'
 digit_count = DIGIT_COUNT
 model = create_single_digit_model()
 plot(model, 'single_digit_model.png')
