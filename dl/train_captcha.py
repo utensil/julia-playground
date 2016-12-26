@@ -14,11 +14,18 @@ from keras.models import Model
 from keras.utils import np_utils
 from keras.layers import merge, Convolution2D, MaxPooling2D, Input, Dense, Dropout, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
-from keras.utils.visualize_util import plot
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
+USE_PLOT = True
+try:
+    from keras.utils.visualize_util import plot as keras_plot
+except:
+    USE_PLOT = False
+USE_PLOT = False
+plot = keras_plot if USE_PLOT else (lambda model, file_name: model)
+
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
 DIGIT_COUNT = 4
@@ -120,34 +127,24 @@ def generate_image_sets_for_multi_digits():
 
     return (x_train, y_train, x_test, y_test)
 
-def create_single_digit_model():
+def create_cnn_layers():
     input_layer = Input(name='input', shape=(RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH))
     h = Convolution2D(22, 5, 5, activation='relu', dim_ordering='th')(input_layer)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
     h = Convolution2D(44, 3, 3, activation='relu', dim_ordering='th')(h)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
     h = Dropout(0.25)(h)
-    h = Flatten()(h)
-    h = Dense(256, activation='relu')(h)
+    last_cnn_layer = Flatten()(h)
+    return (input_layer, last_cnn_layer)
+
+def create_single_digit_model():
+    input_layer, last_cnn_layer = create_cnn_layers()
+
+    h = Dense(256, activation='relu')(last_cnn_layer)
     h = Dropout(0.5)(h)
     output_layer = Dense(CLASS_COUNT, activation='softmax', name='out')(h)
 
     model = Model(input_layer, output_layer)
-
-    # graph = Graph()
-    # # graph.add_input(name='input', input_shape=(3, 40, 40))
-    # graph.add_input(name='input', input_shape=(RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH))
-    # # http://stackoverflow.com/questions/36243536/what-is-the-number-of-filter-in-cnn/36243662
-    # graph.add_node(Convolution2D(22, 5, 5, activation='relu', dim_ordering='th'), name='conv1', input='input')
-    # graph.add_node(MaxPooling2D(pool_size=POOL_SIZE), name='pool1', input='conv1')
-    # graph.add_node(Convolution2D(44, 3, 3, activation='relu', dim_ordering='th'), name='conv2', input='pool1')
-    # graph.add_node(MaxPooling2D(pool_size=POOL_SIZE), name='pool2', input='conv2')
-    # graph.add_node(Dropout(0.25), name='drop', input='pool2')
-    # graph.add_node(Flatten(), name='flatten', input='drop')
-    # graph.add_node(Dense(256, activation='relu'), name='ip', input='flatten')
-    # graph.add_node(Dropout(0.5), name='drop_out', input='ip')
-    # graph.add_node(Dense(CLASS_COUNT, activation='softmax'), name='result', input='drop_out')
-    # graph.add_output(name='out', input='result')
 
     model.compile(
         optimizer='adadelta',
@@ -159,100 +156,71 @@ def create_single_digit_model():
     return model
 
 def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
-    base_model = create_single_digit_model()
-    if model_file != '':
-        base_model.load_weights(model_file)
-    # print base_model.layers
-    # print base_model.get_layer(index=6)
-    no_top_model = Model(input=base_model.input, output=base_model.get_layer(index=6).output)
-    # print no_top_model.layers
-    input_layer = base_model.input
-    last_cnn_layer = base_model.get_layer(index=6)
+    input_layer, last_cnn_layer = create_cnn_layers()
 
     outputs = []
     loss = {}
     for index in range(0, digit_count):
-        h = Dense(256, activation='relu')(last_cnn_layer.output)
+        h = Dense(256, activation='relu')(last_cnn_layer)
         h = Dropout(0.5)(h)
         out_name = OUT_PUT_NAME_FORMAT % index
         output = Dense(CLASS_COUNT, activation='softmax', name=out_name)(h)
         loss[out_name] = 'categorical_crossentropy'
         outputs.append(output)
 
-    model = Model(input=base_model.input, output=outputs)
+    model = Model(input=input_layer, output=outputs)
     model.compile(
         optimizer='adadelta',
         loss=loss
     )
-
-    # merged_output = merge(outputs, mode='concat',
-    #                 concat_axis=0, output_shape=(digit_count, CLASS_COUNT),
-    #                 name='out') # concat_axis=
-    #
-    # model = Model(input=base_model.input, output=merged_output)
-    # model.compile(
-    #     optimizer='adadelta',
-    #     loss={
-    #         'out': 'categorical_crossentropy',
-    #     }
-    # )
-
     return model
 
-# def inspect_merged_predict(multi_digit_model, x, digit_count=DIGIT_COUNT):
-#     intermediate_models = []
-#     predicts = {}
-#     predicts['out'] = multi_digit_model.predict(x)
-#
-#     for i in range(0, digit_count):
-#         out_name = OUT_PUT_NAME_FORMAT % i
-#         model = Model(input=multi_digit_model.input,
-#                       output=multi_digit_model.get_layer(out_name).output)
-#         model.compile(
-#             optimizer='adadelta',
-#             loss={
-#                 out_name: 'categorical_crossentropy',
-#             }
-#         )
-#         predicts[out_name] = model.predict(x)
-#
-#     return predicts
+def print_acc(acc):
+    print 'Single picture test accuracy: %2.2f%%' % (acc * 100)
+    print 'Theoretical accuracy: %2.2f%% ~  %2.2f%%' % ((5*acc-4)*100, pow(acc, 5)*100)
+
+def save_model(model, save_model_file):
+    print '... saving to %s' % save_model_file
+    model.save_weights(save_model_file, overwrite=True)
+
+BANNER_BAR = '-----------------------------------'
+BANNER_BAR = '———————————————————————————————————'
 
 def train_single_digit_model(model, x_train, y_train, x_test, y_test, index):
+    save_model_file = 'model/model_one_%d.hdf5' % (index + 1)
+
     class ValidateAcc(Callback):
         def on_epoch_end(self, epoch, logs={}):
-            print '\n————————————————————————————————————'
+            print
+            print BANNER_BAR
             # model.load_weights('tmp/weights.%02d.hdf5' % epoch)
             r = model.predict(x_test, verbose=0)
             y_predict = array([argmax(i) for i in r])
             length = len(y_predict) * 1.0
             acc = sum(y_predict == y_test) / length
-            print 'Single picture test accuracy: %2.2f%%' % (acc * 100)
-            print 'Theoretical accuracy: %2.2f%% ~  %2.2f%%' % ((5*acc-4)*100, pow(acc, 5)*100)
-            print '————————————————————————————————————'
+            print_acc(acc)
+            print BANNER_BAR
 
     check_point = ModelCheckpoint(filepath="tmp/weights.{epoch:02d}.hdf5")
     back = ValidateAcc()
     print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
     if index >= 0:
-        model_file = 'model/model_2_%d.hdf5' % index
+        model_file = 'model/model_one_%d.hdf5' % index
         print "Training based on %s" % model_file
         model.load_weights(model_file)
     model.fit(
         {'input': x_train}, {'out': y_train},
         batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH, callbacks=[check_point, back]
     )
-    print '... saving'
-    save_model_file = 'model/model_2_%d.hdf5' % (index + 1)
-    model.save_weights(save_model_file, overwrite=True)
+    save_model(model, save_model_file)
 
 def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
     save_model_file = 'model/model_mul_%d.hdf5' % (index + 1)
 
     class ValidateAcc(Callback):
         def on_epoch_end(self, epoch, logs={}):
-            print '\n————————————————————————————————————'
-            # model.load_weights('tmp/weights.%02d.hdf5' % epoch)
+            print
+            print BANNER_BAR
             length = len(x_test)
             r = model.predict(x_test, verbose=0)
             # https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
@@ -269,15 +237,13 @@ def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
                 acc = sum(is_predict_correct_i) / (length * 1.0)
                 # print y_predict_i, y_test_i, length, acc
                 print '[%s]:' % output_name_i
-                print '\tSingle picture test accuracy: %2.2f%%' % (acc * 100)
-                print '\tTheoretical accuracy: %2.2f%% ~  %2.2f%%' % ((5*acc-4)*100, pow(acc, 5)*100)
+                print_acc(acc)
                 is_predict_correct = is_predict_correct & is_predict_correct_i
             acc_all = sum(is_predict_correct) / (length * 1.0)
             # print y_predict_i, y_test_i, length, acc
             print '[out]:'
-            print '\tSingle picture test accuracy: %2.2f%%' % (acc_all * 100)
-            print '\tTheoretical accuracy: %2.2f%% ~  %2.2f%%' % ((5*acc_all-4)*100, pow(acc_all, 5)*100)
-            print '————————————————————————————————————'
+            print_acc(acc_all)
+            print BANNER_BAR
 
     # check_point = ModelCheckpoint(filepath="tmp/mul.weights.{epoch:02d}.hdf5")
     check_point = ModelCheckpoint(filepath=save_model_file)
@@ -292,48 +258,53 @@ def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
         batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
         callbacks=[check_point, back]
     )
-    print '... saving'
+    save_model(model, save_model_file)
 
-    model.save_weights(save_model_file, overwrite=True)
+print sys.argv
 
-# print sys.argv[1]
-if len(sys.argv) > 1:
-    index = int(sys.argv[1])
+ARG_MODEL_TYPE = 1
+
+MODEL_TYPE_SINGLE = 'one'
+MODEL_TYPE_MULTIPLE = 'mul'
+
+ARG_MODEL_INDEX = 2
+ARG_MODEL_INDEX_MAX = 3
+
+if len(sys.argv) > ARG_MODEL_TYPE:
+    model_type = MODEL_TYPE_MULTIPLE if sys.argv[ARG_MODEL_TYPE] == MODEL_TYPE_MULTIPLE else MODEL_TYPE_SINGLE
+
+if len(sys.argv) > ARG_MODEL_INDEX:
+    index = int(sys.argv[ARG_MODEL_INDEX])
 else:
     index = -1
 
-if len(sys.argv) > 2:
-    max = int(sys.argv[2])
+if len(sys.argv) > ARG_MODEL_INDEX_MAX:
+    max = int(sys.argv[ARG_MODEL_INDEX_MAX])
 else:
     max = 1
 
-base_model_file = '' # 'model/model_2_107.hdf5'
+base_model_file = '' # 'model/model_one_107.hdf5'
 digit_count = DIGIT_COUNT
 model = create_single_digit_model()
 plot(model, 'single_digit_model.png')
 model = create_multi_digit_model(base_model_file, digit_count)
 plot(model, '%d_digit_model.png' % digit_count)
 
-# x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
-# p = inspect_merged_predict(model, x_test)
-# for key in p:
-#     print key
-#     print p[key]
+if model_type == MODEL_TYPE_SINGLE:
+    model = create_single_digit_model()
 
-# print generate_image_sets_for_multi_digits()
-
-# model = create_single_digit_model()
-#
-# while index < max:
-#     x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
-#     train_single_digit_model(model, x_train, y_train, x_test, y_test, index)
-#     index = index + 1
-
-while index < max:
-    x_train, y_train, x_test, y_test = generate_image_sets_for_multi_digits()
-    # print x_train, y_train, x_test, y_test
-    train_multi_digit_model(model, x_train, y_train, x_test, y_test, index)
-    index = index + 1
+    while index < max:
+        x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
+        train_single_digit_model(model, x_train, y_train, x_test, y_test, index)
+        index = index + 1
+elif model_type == MODEL_TYPE_MULTIPLE:
+    while index < max:
+        x_train, y_train, x_test, y_test = generate_image_sets_for_multi_digits()
+        # print x_train, y_train, x_test, y_test
+        train_multi_digit_model(model, x_train, y_train, x_test, y_test, index)
+        index = index + 1
+else:
+    pass
 
 # for index in range(SHOW_SAMPLE_SIZE):
 #     display.display(labels[index])
