@@ -9,7 +9,7 @@ import PIL
 import numpy as np
 from numpy import argmax, array
 from sklearn.cross_validation import train_test_split
-from keras.callbacks import Callback, ModelCheckpoint
+from keras.callbacks import Callback, ModelCheckpoint, TensorBoard
 from keras.models import Model
 from keras.utils import np_utils
 from keras.layers import merge, Convolution2D, MaxPooling2D, Input, Dense, Dropout, Flatten
@@ -203,14 +203,14 @@ def train_single_digit_model(model, x_train, y_train, x_test, y_test, index):
 
     check_point = ModelCheckpoint(filepath="tmp/weights.{epoch:02d}.hdf5")
     back = ValidateAcc()
+    tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
+
     print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
-    if index >= 0:
-        model_file = 'model/model_one_%d.hdf5' % index
-        print "Training based on %s" % model_file
-        model.load_weights(model_file)
+
     model.fit(
         {'input': x_train}, {'out': y_train},
-        batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH, callbacks=[check_point, back]
+        batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
+        callbacks=[check_point, back, tb]
     )
     save_model(model, save_model_file)
 
@@ -248,15 +248,14 @@ def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
     # check_point = ModelCheckpoint(filepath="tmp/mul.weights.{epoch:02d}.hdf5")
     check_point = ModelCheckpoint(filepath=save_model_file)
     back = ValidateAcc()
+    tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
+
     print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
-    if index >= 0:
-        model_file = 'model/model_mul_%d.hdf5' % index
-        print "Training based on %s" % model_file
-        model.load_weights(model_file)
+
     model.fit(
         {'input': x_train}, y_train,
         batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
-        callbacks=[check_point, back]
+        callbacks=[check_point, back, tb]
     )
     save_model(model, save_model_file)
 
@@ -285,19 +284,29 @@ else:
 
 base_model_file = '' # 'model/model_one_107.hdf5'
 digit_count = DIGIT_COUNT
-model = create_single_digit_model()
-plot(model, 'single_digit_model.png')
-model = create_multi_digit_model(base_model_file, digit_count)
-plot(model, '%d_digit_model.png' % digit_count)
 
 if model_type == MODEL_TYPE_SINGLE:
     model = create_single_digit_model()
+    plot(model, 'single_digit_model.png')
+
+    if index >= 0:
+        model_file = 'model/model_one_%d.hdf5' % index
+        print "Training based on %s" % model_file
+        model.load_weights(model_file)
 
     while index < max:
         x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
         train_single_digit_model(model, x_train, y_train, x_test, y_test, index)
         index = index + 1
 elif model_type == MODEL_TYPE_MULTIPLE:
+    model = create_multi_digit_model(base_model_file, digit_count)
+    plot(model, '%d_digit_model.png' % digit_count)
+
+    if index >= 0:
+        model_file = 'model/model_mul_%d.hdf5' % index
+        print "Training based on %s" % model_file
+        model.load_weights(model_file)
+
     while index < max:
         x_train, y_train, x_test, y_test = generate_image_sets_for_multi_digits()
         # print x_train, y_train, x_test, y_test

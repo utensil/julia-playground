@@ -74,3 +74,5 @@ dl/model
 dl/tmp
 dot_keras
 .docker_temp_*
+du.txt
+.DS_Store
