@@ -25,7 +25,8 @@ USE_PLOT = False
 plot = keras_plot if USE_PLOT else (lambda model, file_name: model)
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 10
+SAMPLE_SIZE = 100
+NB_BATCH = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
 DIGIT_COUNT = 4
@@ -43,13 +44,13 @@ OUT_PUT_NAME_FORMAT = 'out_%02d'
 NB_EPOCH = 10
 BATCH_SIZE = 128
 
-def generate_image_sets_for_single_digit(singl_digit_index=0):
+def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, singl_digit_index=0):
     captcha = ImageCaptcha()
 
     # print DIGIT_FORMAT_STR
     labels = []
     images = []
-    for i in range(0, SAMPLE_SIZE):
+    for i in range(0, nb_sample):
         digits = 0
         last_digit = INVALID_DIGIT
         for j in range(0, DIGIT_COUNT):
@@ -65,11 +66,11 @@ def generate_image_sets_for_single_digit(singl_digit_index=0):
     digit_labels = list()
 
     for digit_index in range(0, DIGIT_COUNT):
-        digit_labels.append(np.empty(SAMPLE_SIZE, dtype="int8"))
+        digit_labels.append(np.empty(nb_sample, dtype="int8"))
 
-    digit_image_data = np.empty((SAMPLE_SIZE, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
+    digit_image_data = np.empty((nb_sample, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
 
-    for index in range(0, SAMPLE_SIZE):
+    for index in range(0, nb_sample):
         img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
         # if index < SHOW_SAMPLE_SIZE:
             # display.display(img)
@@ -85,13 +86,13 @@ def generate_image_sets_for_single_digit(singl_digit_index=0):
 
     return (x_train, y_train, x_test, y_test)
 
-def generate_image_sets_for_multi_digits():
+def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
     captcha = ImageCaptcha()
 
     # print DIGIT_FORMAT_STR
     labels = []
     images = []
-    for i in range(0, SAMPLE_SIZE):
+    for i in range(0, nb_sample):
         digits = 0
         last_digit = INVALID_DIGIT
         for j in range(0, DIGIT_COUNT):
@@ -104,11 +105,11 @@ def generate_image_sets_for_multi_digits():
         labels.append(digits_as_str)
         images.append(captcha.generate_image(digits_as_str))
 
-    digit_labels = np.empty((SAMPLE_SIZE, DIGIT_COUNT), dtype="int8")
+    digit_labels = np.empty((nb_sample, DIGIT_COUNT), dtype="int8")
 
-    digit_image_data = np.empty((SAMPLE_SIZE, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
+    digit_image_data = np.empty((nb_sample, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
 
-    for index in range(0, SAMPLE_SIZE):
+    for index in range(0, nb_sample):
         img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
         # if index < SHOW_SAMPLE_SIZE:
             # display.display(img)
@@ -207,11 +208,19 @@ def train_single_digit_model(model, x_train, y_train, x_test, y_test, index):
 
     print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
 
-    model.fit(
-        {'input': x_train}, {'out': y_train},
-        batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
+    def gen(nb_sample):
+        x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit(nb_sample)
+        while True:
+            yield {'input': x_train}, {'out': y_train}
+
+    model.fit_generator(
+        gen(SAMPLE_SIZE / NB_BATCH),
+        samples_per_epoch=SAMPLE_SIZE,
+        # batch_size=BATCH_SIZE,
+        nb_epoch=NB_EPOCH,
         callbacks=[check_point, back, tb]
     )
+
     save_model(model, save_model_file)
 
 def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
@@ -252,11 +261,19 @@ def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
 
     print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
 
-    model.fit(
-        {'input': x_train}, y_train,
-        batch_size=BATCH_SIZE, nb_epoch=NB_EPOCH,
+    def gen(nb_sample):
+        x_train, y_train, x_test, y_test = generate_image_sets_for_multi_digits(nb_sample)
+        while True:
+            yield {'input': x_train}, y_train
+
+    model.fit_generator(
+        gen(SAMPLE_SIZE / NB_BATCH),
+        samples_per_epoch=SAMPLE_SIZE,
+        # batch_size=BATCH_SIZE,
+        nb_epoch=NB_EPOCH,
         callbacks=[check_point, back, tb]
     )
+
     save_model(model, save_model_file)
 
 print sys.argv

@@ -76,3 +76,4 @@ dot_keras
 .docker_temp_*
 du.txt
 .DS_Store
+dl/logs/
