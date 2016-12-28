@@ -41,7 +41,7 @@ TEST_SAMPLE_RATE = 0.3
 NB_BATCH = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
-DIGIT_COUNT = 2
+DIGIT_COUNT = 4
 DIGIT_FORMAT_STR = "%%0%dd" % DIGIT_COUNT
 CLASS_COUNT = 10
 RGB_COLOR_COUNT = 3
@@ -283,7 +283,7 @@ def train_multi_digit_model(model, index):
 
             x_test, y_test_as_map = gen(test_sample_size).next()
             r = model.predict(x_test, verbose=0)
-            print r
+            # print r
             # https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
             is_predict_correct = np.ones(test_sample_size, dtype="bool")
             # print r[0]
@@ -292,11 +292,11 @@ def train_multi_digit_model(model, index):
             # print array([argmax(j) for j in r[0]])
             for i in range(0, DIGIT_COUNT):
                 output_name_i = OUT_PUT_NAME_FORMAT % i
-                print r[i]
+                # print r[i]
                 y_predict_as_num_i = array([argmax(j) for j in r[i]])
                 y_test_i = y_test_as_map[output_name_i]
                 y_test_as_num_i = array([argmax(i) for i in y_test_i])
-                print y_predict_as_num_i, y_test_as_num_i
+                # print y_predict_as_num_i, y_test_as_num_i
                 is_predict_correct_i = y_predict_as_num_i == y_test_as_num_i
                 acc = sum(is_predict_correct_i) / (test_sample_size * 1.0)
                 print '[%s]:' % output_name_i
