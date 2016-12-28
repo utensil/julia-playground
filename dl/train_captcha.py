@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import os
 from io import BytesIO
 import glob
 import math
@@ -14,7 +15,17 @@ from keras.models import Model
 from keras.utils import np_utils
 from keras.layers import merge, Convolution2D, MaxPooling2D, Input, Dense, Dropout, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D
+from keras import backend as K
 from captcha.image import ImageCaptcha,WheezyCaptcha
+
+# os.environ
+IS_TH = K.backend() == 'theano'
+# image_dim_ordering: string, either "tf" or "th". It specifies which dimension
+# ordering convention Keras will follow. (keras.backend.image_dim_ordering() returns it.)
+# For 2D data (e.g. image), "tf" assumes (rows, cols, channels)
+# while "th" assumes (channels, rows, cols).
+# For 3D data, "tf" assumes (conv_dim1, conv_dim2, conv_dim3, channels)
+# while "th" assumes  (channels, conv_dim1, conv_dim2, conv_dim3).
 
 USE_PLOT = True
 try:
@@ -25,11 +36,12 @@ USE_PLOT = False
 plot = keras_plot if USE_PLOT else (lambda model, file_name: model)
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 100
+SAMPLE_SIZE = 20
+TEST_SAMPLE_RATE = 0.3
 NB_BATCH = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
-DIGIT_COUNT = 4
+DIGIT_COUNT = 2
 DIGIT_FORMAT_STR = "%%0%dd" % DIGIT_COUNT
 CLASS_COUNT = 10
 RGB_COLOR_COUNT = 3
@@ -44,7 +56,7 @@ OUT_PUT_NAME_FORMAT = 'out_%02d'
 NB_EPOCH = 10
 BATCH_SIZE = 128
 
-def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, singl_digit_index=0):
+def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0):
     captcha = ImageCaptcha()
 
     # print DIGIT_FORMAT_STR
@@ -68,23 +80,32 @@ def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, singl_digit_inde
     for digit_index in range(0, DIGIT_COUNT):
         digit_labels.append(np.empty(nb_sample, dtype="int8"))
 
-    digit_image_data = np.empty((nb_sample, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
+    shape = (nb_sample, RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH) if IS_TH else (nb_sample, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT)
+    digit_image_data = np.empty(shape, dtype="float32")
 
     for index in range(0, nb_sample):
         img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
         # if index < SHOW_SAMPLE_SIZE:
             # display.display(img)
         img_arr = np.asarray(img, dtype="float32") / 255.0
-        digit_image_data[index, :, :, :] = np.rollaxis(img_arr, 2)
+        if IS_TH:
+            digit_image_data[index, :, :, :] = np.rollaxis(img_arr, 2)
+        else:
+            digit_image_data[index, :, :, :] = img_arr
+
         for digit_index in range(0, DIGIT_COUNT):
             digit_labels[digit_index][index] = labels[index][digit_index]
 
-    X, Y_all = digit_image_data, digit_labels[singl_digit_index]
-    x_train, x_test, y_train_as_num, y_test_as_num = train_test_split(X, Y_all, test_size=0.1, random_state=0)
-    y_train = np_utils.to_categorical(y_train_as_num, CLASS_COUNT)
-    y_test = y_test_as_num
+    x = digit_image_data
+    y = np_utils.to_categorical(digit_labels[single_digit_index], CLASS_COUNT)
 
-    return (x_train, y_train, x_test, y_test)
+    return x, y
+
+    # X, Y_all = digit_image_data, digit_labels[single_digit_index]
+    # x_train, x_test, y_train_as_num, y_test_as_num = train_test_split(X, Y_all, test_size=0.1, random_state=0)
+    # y_train = np_utils.to_categorical(y_train_as_num, CLASS_COUNT)
+    # y_test = y_test_as_num
+    # return (x_train, y_train, x_test, y_test)
 
 def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
     captcha = ImageCaptcha()
@@ -107,32 +128,45 @@ def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
 
     digit_labels = np.empty((nb_sample, DIGIT_COUNT), dtype="int8")
 
-    digit_image_data = np.empty((nb_sample, 3, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH), dtype="float32")
+    shape = (nb_sample, RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH) if IS_TH else (nb_sample, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT)
+    digit_image_data = np.empty(shape, dtype="float32")
 
     for index in range(0, nb_sample):
         img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
         # if index < SHOW_SAMPLE_SIZE:
             # display.display(img)
         img_arr = np.asarray(img, dtype="float32") / 255.0
-        digit_image_data[index, :, :, :] = np.rollaxis(img_arr, 2)
+
+        if IS_TH:
+            digit_image_data[index, :, :, :] = np.rollaxis(img_arr, 2)
+        else:
+            digit_image_data[index, :, :, :] = img_arr
+
         for digit_index in range(0, DIGIT_COUNT):
             digit_labels[index][digit_index] = labels[index][digit_index]
+    x, y_as_num = digit_image_data, np.rollaxis(digit_labels, 1)
+    y = { (OUT_PUT_NAME_FORMAT % i ): np_utils.to_categorical(y_as_num[i], CLASS_COUNT) for i in range(0, DIGIT_COUNT) }
 
-    X, Y_all = digit_image_data, digit_labels
-    x_train, x_test, y_train_as_num, y_test_as_num = train_test_split(X, Y_all, test_size=0.1, random_state=0)
-    y_train_as_num = np.rollaxis(y_train_as_num, 1)
-    y_test_as_num = np.rollaxis(y_test_as_num, 1)
+    return x, y
 
-    y_train = { (OUT_PUT_NAME_FORMAT % i ): np_utils.to_categorical(y_train_as_num[i], CLASS_COUNT) for i in range(0, DIGIT_COUNT) }
-    y_test = { (OUT_PUT_NAME_FORMAT % i ): y_test_as_num[i] for i in range(0, DIGIT_COUNT) }
-
-    return (x_train, y_train, x_test, y_test)
+    # X, Y_all = digit_image_data, digit_labels
+    # x_train, x_test, y_train_as_num, y_test_as_num = train_test_split(X, Y_all, test_size=0.1, random_state=0)
+    # y_train_as_num = np.rollaxis(y_train_as_num, 1)
+    # y_test_as_num = np.rollaxis(y_test_as_num, 1)
+    #
+    # y_train = { (OUT_PUT_NAME_FORMAT % i ): np_utils.to_categorical(y_train_as_num[i], CLASS_COUNT) for i in range(0, DIGIT_COUNT) }
+    # y_test = { (OUT_PUT_NAME_FORMAT % i ): y_test_as_num[i] for i in range(0, DIGIT_COUNT) }
+    #
+    # return (x_train, y_train, x_test, y_test)
 
 def create_cnn_layers():
-    input_layer = Input(name='input', shape=(RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH))
-    h = Convolution2D(22, 5, 5, activation='relu', dim_ordering='th')(input_layer)
+    shape = (RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH) if IS_TH else (IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT)
+    dim_ordering = 'th' if IS_TH else 'tf'
+
+    input_layer = Input(name='input', shape=shape)
+    h = Convolution2D(22, 5, 5, activation='relu', dim_ordering=dim_ordering)(input_layer)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
-    h = Convolution2D(44, 3, 3, activation='relu', dim_ordering='th')(h)
+    h = Convolution2D(44, 3, 3, activation='relu', dim_ordering=dim_ordering)(h)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
     h = Dropout(0.25)(h)
     last_cnn_layer = Flatten()(h)
@@ -187,91 +221,109 @@ def save_model(model, save_model_file):
 BANNER_BAR = '-----------------------------------'
 BANNER_BAR = '———————————————————————————————————'
 
-def train_single_digit_model(model, x_train, y_train, x_test, y_test, index):
+def train_single_digit_model(model, index):
     save_model_file = 'model/model_one_%d.hdf5' % (index + 1)
+    train_sample_size = SAMPLE_SIZE
+    test_sample_size = int(SAMPLE_SIZE * TEST_SAMPLE_RATE)
+
+    def gen(nb_sample):
+        x, y = generate_image_sets_for_single_digit(nb_sample)
+        while True:
+            yield {'input': x}, {'out': y}
 
     class ValidateAcc(Callback):
         def on_epoch_end(self, epoch, logs={}):
             print
             print BANNER_BAR
-            # model.load_weights('tmp/weights.%02d.hdf5' % epoch)
+            print 'Testing on %d samples...' % test_sample_size
+            x_test, y_test_as_map = gen(test_sample_size).next()
+            y_test = y_test_as_map['out']
+            y_test_as_num = array([argmax(i) for i in y_test])
             r = model.predict(x_test, verbose=0)
-            y_predict = array([argmax(i) for i in r])
-            length = len(y_predict) * 1.0
-            acc = sum(y_predict == y_test) / length
+            y_predict_as_num = array([argmax(i) for i in r])
+            acc = sum(y_predict_as_num == y_test_as_num) / test_sample_size
             print_acc(acc)
             print BANNER_BAR
 
-    check_point = ModelCheckpoint(filepath="tmp/weights.{epoch:02d}.hdf5")
-    back = ValidateAcc()
-    tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
+    check_point = ModelCheckpoint(filepath=save_model_file)
+    validation = ValidateAcc()
 
-    print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
+    callbacks = [check_point, validation]
+    if not IS_TH:
+        tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
+        callbacks.append(tb)
 
-    def gen(nb_sample):
-        x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit(nb_sample)
-        while True:
-            yield {'input': x_train}, {'out': y_train}
+    print 'Training on %d samples...' % (train_sample_size)
 
     model.fit_generator(
-        gen(SAMPLE_SIZE / NB_BATCH),
-        samples_per_epoch=SAMPLE_SIZE,
+        gen(train_sample_size / NB_BATCH),
+        samples_per_epoch=train_sample_size,
         # batch_size=BATCH_SIZE,
         nb_epoch=NB_EPOCH,
-        callbacks=[check_point, back, tb]
+        callbacks=callbacks
     )
 
     save_model(model, save_model_file)
 
-def train_multi_digit_model(model, x_train, y_train, x_test, y_test, index):
+def train_multi_digit_model(model, index):
     save_model_file = 'model/model_mul_%d.hdf5' % (index + 1)
+    train_sample_size = SAMPLE_SIZE
+    test_sample_size = int(SAMPLE_SIZE * TEST_SAMPLE_RATE)
+
+    def gen(nb_sample):
+        x, y = generate_image_sets_for_multi_digits(nb_sample)
+        while True:
+            yield {'input': x}, y
 
     class ValidateAcc(Callback):
         def on_epoch_end(self, epoch, logs={}):
             print
             print BANNER_BAR
-            length = len(x_test)
+            print 'Testing on %d samples...' % test_sample_size
+
+            x_test, y_test_as_map = gen(test_sample_size).next()
             r = model.predict(x_test, verbose=0)
+            print r
             # https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
-            is_predict_correct = np.ones(length, dtype="bool")
+            is_predict_correct = np.ones(test_sample_size, dtype="bool")
             # print r[0]
             # print r[0][0]
             # print argmax(r[0][0])
             # print array([argmax(j) for j in r[0]])
             for i in range(0, DIGIT_COUNT):
                 output_name_i = OUT_PUT_NAME_FORMAT % i
-                y_predict_i = array([argmax(j) for j in r[i]])
-                y_test_i = y_test[output_name_i]
-                is_predict_correct_i = y_predict_i == y_test_i
-                acc = sum(is_predict_correct_i) / (length * 1.0)
-                # print y_predict_i, y_test_i, length, acc
+                print r[i]
+                y_predict_as_num_i = array([argmax(j) for j in r[i]])
+                y_test_i = y_test_as_map[output_name_i]
+                y_test_as_num_i = array([argmax(i) for i in y_test_i])
+                print y_predict_as_num_i, y_test_as_num_i
+                is_predict_correct_i = y_predict_as_num_i == y_test_as_num_i
+                acc = sum(is_predict_correct_i) / (test_sample_size * 1.0)
                 print '[%s]:' % output_name_i
                 print_acc(acc)
                 is_predict_correct = is_predict_correct & is_predict_correct_i
-            acc_all = sum(is_predict_correct) / (length * 1.0)
-            # print y_predict_i, y_test_i, length, acc
+            acc_all = sum(is_predict_correct) / (test_sample_size * 1.0)
+            # print y_predict_i, y_test_i, test_sample_size, acc
             print '[out]:'
             print_acc(acc_all)
             print BANNER_BAR
 
-    # check_point = ModelCheckpoint(filepath="tmp/mul.weights.{epoch:02d}.hdf5")
-    check_point = ModelCheckpoint(filepath=save_model_file)
-    back = ValidateAcc()
-    tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
+    check_point = ModelCheckpoint(filepath=save_model_file) # "tmp/mul.weights.{epoch:02d}.hdf5"
+    validation = ValidateAcc()
 
-    print 'Begin train on %d samples... test on %d samples...' % (len(x_train), len(x_test))
+    callbacks = [check_point, validation]
+    if not IS_TH:
+        tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
+        callbacks.append(tb)
 
-    def gen(nb_sample):
-        x_train, y_train, x_test, y_test = generate_image_sets_for_multi_digits(nb_sample)
-        while True:
-            yield {'input': x_train}, y_train
+    print 'Training on %d samples...' % (train_sample_size)
 
     model.fit_generator(
-        gen(SAMPLE_SIZE / NB_BATCH),
-        samples_per_epoch=SAMPLE_SIZE,
+        gen(train_sample_size / NB_BATCH),
+        samples_per_epoch=train_sample_size,
         # batch_size=BATCH_SIZE,
         nb_epoch=NB_EPOCH,
-        callbacks=[check_point, back, tb]
+        callbacks=callbacks
     )
 
     save_model(model, save_model_file)
@@ -312,8 +364,7 @@ if model_type == MODEL_TYPE_SINGLE:
         model.load_weights(model_file)
 
     while index < max:
-        x_train, y_train, x_test, y_test = generate_image_sets_for_single_digit()
-        train_single_digit_model(model, x_train, y_train, x_test, y_test, index)
+        train_single_digit_model(model, index)
         index = index + 1
 elif model_type == MODEL_TYPE_MULTIPLE:
     model = create_multi_digit_model(base_model_file, digit_count)
@@ -325,9 +376,7 @@ elif model_type == MODEL_TYPE_MULTIPLE:
         model.load_weights(model_file)
 
     while index < max:
-        x_train, y_train, x_test, y_test = generate_image_sets_for_multi_digits()
-        # print x_train, y_train, x_test, y_test
-        train_multi_digit_model(model, x_train, y_train, x_test, y_test, index)
+        train_multi_digit_model(model, index)
         index = index + 1
 else:
     pass
