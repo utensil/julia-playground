@@ -27,6 +27,17 @@ IS_TH = K.backend() == 'theano'
 # For 3D data, "tf" assumes (conv_dim1, conv_dim2, conv_dim3, channels)
 # while "th" assumes  (channels, conv_dim1, conv_dim2, conv_dim3).
 
+# 20 train samples MBP
+# 23s th one
+# 274s th mul(4)
+# 11s tf one
+# 44s tf mul(4)
+# force IS_TH = True
+# 32s tf one
+# hang tf mul(4)
+
+
+
 USE_PLOT = True
 try:
     from keras.utils.visualize_util import plot as keras_plot
