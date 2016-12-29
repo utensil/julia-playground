@@ -17,7 +17,7 @@ from tflearn.data_utils import to_categorical
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 20
+SAMPLE_SIZE = 1000
 TEST_SAMPLE_RATE = 0.3
 NB_BATCH = 10
 SHOW_SAMPLE_SIZE = 5
@@ -179,7 +179,7 @@ BANNER_BAR = '-----------------------------------'
 BANNER_BAR = '———————————————————————————————————'
 
 def train_single_digit_model(model, index):
-    save_model_file = 'model/tflm_one_%d.hdf5' % (index + 1)
+    save_model_file = 'model/one_%d.tflearn' % (index + 1)
     train_sample_size = SAMPLE_SIZE
     test_sample_size = int(SAMPLE_SIZE * TEST_SAMPLE_RATE)
 
@@ -188,37 +188,41 @@ def train_single_digit_model(model, index):
         while True:
             yield {'input': x}, {'out': y}
 
-    # class ValidateAcc(Callback):
-    #     def on_epoch_end(self, epoch, logs={}):
+    # class ValidateAcc(tflearn.callbacks.Callback):
+    #     def __init__(self, model):
+    #         self.model = model
+    #
+    #     def on_epoch_end(self, training_state):
     #         print
     #         print BANNER_BAR
     #         print 'Testing on %d samples...' % test_sample_size
     #         x_test, y_test_as_map = gen(test_sample_size).next()
     #         y_test = y_test_as_map['out']
     #         y_test_as_num = array([argmax(i) for i in y_test])
-    #         r = model.predict(x_test, verbose=0)
+    #         r = self.model.predict(x_test)
     #         y_predict_as_num = array([argmax(i) for i in r])
     #         acc = sum(y_predict_as_num == y_test_as_num) / test_sample_size
     #         print_acc(acc)
     #         print BANNER_BAR
 
     # check_point = ModelCheckpoint(filepath=save_model_file)
-    # validation = ValidateAcc()
+    # validation = ValidateAcc(model)
     #
-    # callbacks = [check_point, validation]
+    # callbacks = [validation]
     # if not IS_TH:
     #     tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
     #     callbacks.append(tb)
 
     print 'Training on %d samples...' % (train_sample_size)
 
-    x_train, y_train = gen(test_sample_size).next()
+    x_train, y_train = gen(train_sample_size).next()
 
     model.fit(
         x_train, y_train,
         NB_EPOCH,
         show_metric=True,
-        run_id='tfl'
+        run_id=save_model_file
+        # , callbacks=callbacks
     )
 
     save_model(model, save_model_file)
@@ -316,9 +320,9 @@ if model_type == MODEL_TYPE_SINGLE:
     model = create_single_digit_model()
 
     if index >= 0:
-        model_file = 'model/model_one_%d.hdf5' % index
+        model_file = 'model/one_%d.tflearn' % index
         print "Training based on %s" % model_file
-        model.load(model_file)
+        model.load(model_file, weights_only=True)
 
     while index < max:
         train_single_digit_model(model, index)
