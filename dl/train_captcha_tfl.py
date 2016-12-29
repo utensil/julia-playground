@@ -17,8 +17,8 @@ from tflearn.data_utils import to_categorical
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 1000
-TEST_SAMPLE_RATE = 0.3
+SAMPLE_SIZE = 10
+TEST_SAMPLE_RATE = 0.1
 NB_BATCH = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
@@ -33,7 +33,7 @@ IMAGE_STD_HEIGHT = 200
 CONV1_NB_FILTERS = IMAGE_STD_HEIGHT / 2 + 2
 CONV2_NB_FILTERS = IMAGE_STD_HEIGHT + 2 * 2
 OUT_PUT_NAME_FORMAT = 'out_%02d'
-NB_EPOCH = 10
+NB_EPOCH = 1
 BATCH_SIZE = 128
 
 def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0):
@@ -76,41 +76,42 @@ def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_ind
 
     return x, y
 
-# def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
-#     captcha = ImageCaptcha()
-#
-#     labels = []
-#     images = []
-#     for i in range(0, nb_sample):
-#         digits = 0
-#         last_digit = INVALID_DIGIT
-#         for j in range(0, DIGIT_COUNT):
-#             digit = last_digit
-#             while digit == last_digit:
-#                 digit = random.randint(0, 9)
-#             last_digit = digit
-#             digits = digits * 10 + digit
-#         digits_as_str = DIGIT_FORMAT_STR % digits
-#         labels.append(digits_as_str)
-#         images.append(captcha.generate_image(digits_as_str))
-#
-#     digit_labels = np.empty((nb_sample, DIGIT_COUNT), dtype="int8")
-#
-#     shape = (nb_sample, RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH) if IS_TH else (nb_sample, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT)
-#     digit_image_data = np.empty(shape, dtype="float32")
-#
-#     for index in range(0, nb_sample):
-#         img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
-#         img_arr = np.asarray(img, dtype="float32") / 255.0
-#
-#         digit_image_data[index, :, :, :] = img_arr
-#
-#         for digit_index in range(0, DIGIT_COUNT):
-#             digit_labels[index][digit_index] = labels[index][digit_index]
-#     x, y_as_num = digit_image_data, np.rollaxis(digit_labels, 1)
-#     y = { (OUT_PUT_NAME_FORMAT % i ): np_utils.to_categorical(y_as_num[i], CLASS_COUNT) for i in range(0, DIGIT_COUNT) }
-#
-#     return x, y
+def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
+    captcha = ImageCaptcha()
+
+    labels = []
+    images = []
+    for i in range(0, nb_sample):
+        digits = 0
+        last_digit = INVALID_DIGIT
+        for j in range(0, DIGIT_COUNT):
+            digit = last_digit
+            while digit == last_digit:
+                digit = random.randint(0, 9)
+            last_digit = digit
+            digits = digits * 10 + digit
+        digits_as_str = DIGIT_FORMAT_STR % digits
+        labels.append(digits_as_str)
+        images.append(captcha.generate_image(digits_as_str))
+
+    digit_labels = np.empty((nb_sample, DIGIT_COUNT), dtype="int8")
+
+    shape = (nb_sample, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT)
+    digit_image_data = np.empty(shape, dtype="float32")
+
+    for index in range(0, nb_sample):
+        img = images[index].resize((IMAGE_STD_WIDTH, IMAGE_STD_HEIGHT), PIL.Image.LANCZOS)
+        img_arr = np.asarray(img, dtype="float32") / 255.0
+
+        digit_image_data[index, :, :, :] = img_arr
+
+        for digit_index in range(0, DIGIT_COUNT):
+            digit_labels[index][digit_index] = labels[index][digit_index]
+    x, y_as_num = digit_image_data, np.rollaxis(digit_labels, 1)
+    y = { (OUT_PUT_NAME_FORMAT % i ): to_categorical(y_as_num[i], CLASS_COUNT) for i in range(0, DIGIT_COUNT) }
+    # y = [to_categorical(y_as_num[i], CLASS_COUNT) for i in range(0, DIGIT_COUNT)]
+
+    return x, y
 
 def create_cnn_layers():
     shape = [None, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT]
@@ -147,25 +148,28 @@ def create_single_digit_model():
     model = tflearn.DNN(network, tensorboard_verbose=3, tensorboard_dir='./logs/')
     return model
 
-# def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
-#     input_layer, last_cnn_layer = create_cnn_layers()
-#
-#     outputs = []
-#     loss = {}
-#     for index in range(0, digit_count):
-#         h = Dense(256, activation='relu')(last_cnn_layer)
-#         h = Dropout(0.5)(h)
-#         out_name = OUT_PUT_NAME_FORMAT % index
-#         output = Dense(CLASS_COUNT, activation='softmax', name=out_name)(h)
-#         loss[out_name] = 'categorical_crossentropy'
-#         outputs.append(output)
-#
-#     model = Model(input=input_layer, output=outputs)
-#     model.compile(
-#         optimizer='adadelta',
-#         loss=loss
-#     )
-#     return model
+def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
+    input_layer, last_cnn_layer = create_cnn_layers()
+
+    outputs = []
+    for index in range(0, digit_count):
+        # h = Dense(256, activation='relu')(last_cnn_layer)
+        h = fully_connected(last_cnn_layer, 256, activation='relu')
+        # h = Dropout(0.5)(h)
+        h = dropout(h, 1-0.5)
+        out_name = OUT_PUT_NAME_FORMAT % index
+        # output = Dense(CLASS_COUNT, activation='softmax', name=out_name)(h)
+        h = fully_connected(h, CLASS_COUNT, activation='softmax')
+        output = regression(h, optimizer='adadelta', learning_rate=0.01,
+                     loss='categorical_crossentropy', name=out_name, op_name=out_name)
+        outputs.append(output)
+
+    network = tflearn.merge(outputs, 'concat')
+
+    # model = Model(input=input_layer, output=outputs)
+    model = tflearn.DNN(network, tensorboard_verbose=3, tensorboard_dir='./logs/')
+
+    return model
 
 def print_acc(acc):
     print 'Single picture test accuracy: %2.2f%%' % (acc * 100)
@@ -193,102 +197,93 @@ def train_single_digit_model(model, index):
     #         self.model = model
     #
     #     def on_epoch_end(self, training_state):
-    #         print
-    #         print BANNER_BAR
-    #         print 'Testing on %d samples...' % test_sample_size
-    #         x_test, y_test_as_map = gen(test_sample_size).next()
-    #         y_test = y_test_as_map['out']
-    #         y_test_as_num = array([argmax(i) for i in y_test])
-    #         r = self.model.predict(x_test)
-    #         y_predict_as_num = array([argmax(i) for i in r])
-    #         acc = sum(y_predict_as_num == y_test_as_num) / test_sample_size
-    #         print_acc(acc)
-    #         print BANNER_BAR
+    #         pass
 
-    # check_point = ModelCheckpoint(filepath=save_model_file)
     # validation = ValidateAcc(model)
-    #
     # callbacks = [validation]
-    # if not IS_TH:
-    #     tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
-    #     callbacks.append(tb)
 
     print 'Training on %d samples...' % (train_sample_size)
 
     x_train, y_train = gen(train_sample_size).next()
+    x_validate, y_validate = gen(test_sample_size).next()
 
     model.fit(
         x_train, y_train,
         NB_EPOCH,
         show_metric=True,
-        run_id=save_model_file
+        run_id=save_model_file,
+        validation_set=(x_validate, y_validate)
         # , callbacks=callbacks
     )
 
+    print
+    print BANNER_BAR
+    print 'Testing on %d samples...' % test_sample_size
+    x_test, y_test_as_map = gen(test_sample_size).next()
+    y_test = y_test_as_map['out']
+    y_test_as_num = array([argmax(i) for i in y_test])
+    r = model.predict(x_test)
+    y_predict_as_num = array([argmax(i) for i in r])
+    acc = sum(y_predict_as_num == y_test_as_num) / test_sample_size
+    print_acc(acc)
+    print BANNER_BAR
+
     save_model(model, save_model_file)
 
-# def train_multi_digit_model(model, index):
-#     save_model_file = 'model/model_mul_%d.hdf5' % (index + 1)
-#     train_sample_size = SAMPLE_SIZE
-#     test_sample_size = int(SAMPLE_SIZE * TEST_SAMPLE_RATE)
-#
-#     def gen(nb_sample):
-#         x, y = generate_image_sets_for_multi_digits(nb_sample)
-#         while True:
-#             yield {'input': x}, y
-#
-#     class ValidateAcc(Callback):
-#         def on_epoch_end(self, epoch, logs={}):
-#             print
-#             print BANNER_BAR
-#             print 'Testing on %d samples...' % test_sample_size
-#
-#             x_test, y_test_as_map = gen(test_sample_size).next()
-#             r = model.predict(x_test, verbose=0)
-#             # print r
-#             # https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
-#             is_predict_correct = np.ones(test_sample_size, dtype="bool")
-#             # print r[0]
-#             # print r[0][0]
-#             # print argmax(r[0][0])
-#             # print array([argmax(j) for j in r[0]])
-#             for i in range(0, DIGIT_COUNT):
-#                 output_name_i = OUT_PUT_NAME_FORMAT % i
-#                 # print r[i]
-#                 y_predict_as_num_i = array([argmax(j) for j in r[i]])
-#                 y_test_i = y_test_as_map[output_name_i]
-#                 y_test_as_num_i = array([argmax(i) for i in y_test_i])
-#                 # print y_predict_as_num_i, y_test_as_num_i
-#                 is_predict_correct_i = y_predict_as_num_i == y_test_as_num_i
-#                 acc = sum(is_predict_correct_i) / (test_sample_size * 1.0)
-#                 print '[%s]:' % output_name_i
-#                 print_acc(acc)
-#                 is_predict_correct = is_predict_correct & is_predict_correct_i
-#             acc_all = sum(is_predict_correct) / (test_sample_size * 1.0)
-#             # print y_predict_i, y_test_i, test_sample_size, acc
-#             print '[out]:'
-#             print_acc(acc_all)
-#             print BANNER_BAR
-#
-#     check_point = ModelCheckpoint(filepath=save_model_file) # "tmp/mul.weights.{epoch:02d}.hdf5"
-#     validation = ValidateAcc()
-#
-#     callbacks = [check_point, validation]
-#     if not IS_TH:
-#         tb = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True, write_images=False)
-#         callbacks.append(tb)
-#
-#     print 'Training on %d samples...' % (train_sample_size)
-#
-#     model.fit_generator(
-#         gen(train_sample_size / NB_BATCH),
-#         samples_per_epoch=train_sample_size,
-#         # batch_size=BATCH_SIZE,
-#         nb_epoch=NB_EPOCH,
-#         callbacks=callbacks
-#     )
-#
-#     save_model(model, save_model_file)
+def train_multi_digit_model(model, index):
+    save_model_file = 'model/mul_%d.tflearn' % (index + 1)
+    train_sample_size = SAMPLE_SIZE
+    test_sample_size = int(SAMPLE_SIZE * TEST_SAMPLE_RATE)
+
+    def gen(nb_sample):
+        x, y = generate_image_sets_for_multi_digits(nb_sample)
+        while True:
+            yield {'input': x}, y
+
+    print 'Training on %d samples...' % (train_sample_size)
+
+    x_train, y_train = gen(train_sample_size).next()
+    x_validate, y_validate = gen(test_sample_size).next()
+
+    model.fit(
+        x_train, y_train,
+        NB_EPOCH,
+        show_metric=True,
+        run_id=save_model_file,
+        validation_set=(x_validate, y_validate)
+        # , callbacks=callbacks
+    )
+
+    print
+    print BANNER_BAR
+    print 'Testing on %d samples...' % test_sample_size
+
+    x_test, y_test_as_map = gen(test_sample_size).next()
+    r = model.predict(x_test)
+    r = np.reshape(r, (DIGIT_COUNT, CLASS_COUNT))
+    # https://docs.scipy.org/doc/numpy/reference/arrays.dtypes.html
+    is_predict_correct = np.ones(test_sample_size, dtype="bool")
+
+    for i in range(0, DIGIT_COUNT):
+        output_name_i = OUT_PUT_NAME_FORMAT % i
+        print r[i]
+        y_predict_as_num_i = array([ argmax(j) for j in array([r[i]]) ])
+        y_test_i = y_test_as_map[output_name_i]
+        print y_test_i
+        y_test_as_num_i = array([argmax(i) for i in y_test_i])
+        print y_predict_as_num_i, y_test_as_num_i
+        is_predict_correct_i = y_predict_as_num_i == y_test_as_num_i
+        acc = sum(is_predict_correct_i) / (test_sample_size * 1.0)
+        print '[%s]:' % output_name_i
+        print_acc(acc)
+        is_predict_correct = is_predict_correct & is_predict_correct_i
+    acc_all = sum(is_predict_correct) / (test_sample_size * 1.0)
+    # print y_predict_i, y_test_i, test_sample_size, acc
+    print '[out]:'
+    print_acc(acc_all)
+    print BANNER_BAR
+
+    save_model(model, save_model_file)
 
 print sys.argv
 
@@ -327,20 +322,16 @@ if model_type == MODEL_TYPE_SINGLE:
     while index < max:
         train_single_digit_model(model, index)
         index = index + 1
-# elif model_type == MODEL_TYPE_MULTIPLE:
-#     model = create_multi_digit_model(base_model_file, digit_count)
-#
-#     if index >= 0:
-#         model_file = 'model/model_mul_%d.hdf5' % index
-#         print "Training based on %s" % model_file
-#         model.load_weights(model_file)
-#
-#     while index < max:
-#         train_multi_digit_model(model, index)
-#         index = index + 1
-# else:
-#     pass
+elif model_type == MODEL_TYPE_MULTIPLE:
+    model = create_multi_digit_model(base_model_file, digit_count)
 
-# for index in range(SHOW_SAMPLE_SIZE):
-#     display.display(labels[index])
-#     display.display(images[index])
+    if index >= 0:
+        model_file = 'model/mul_%d.tflearn' % index
+        print "Training based on %s" % model_file
+        model.load(model_file, weights_only=True)
+
+    while index < max:
+        train_multi_digit_model(model, index)
+        index = index + 1
+else:
+    pass
