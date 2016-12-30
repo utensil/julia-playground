@@ -17,8 +17,8 @@ from tflearn.data_utils import to_categorical
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 10
-TEST_SAMPLE_RATE = 0.1
+SAMPLE_SIZE = 20
+TEST_SAMPLE_RATE = 0.3
 NB_BATCH = 10
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
@@ -33,8 +33,9 @@ IMAGE_STD_HEIGHT = 200
 CONV1_NB_FILTERS = IMAGE_STD_HEIGHT / 2 + 2
 CONV2_NB_FILTERS = IMAGE_STD_HEIGHT + 2 * 2
 OUT_PUT_NAME_FORMAT = 'out_%02d'
-NB_EPOCH = 1
+NB_EPOCH = 10
 BATCH_SIZE = 128
+OPTIMIZER = 'adadelta' # 'adam' # 'adadelta'
 
 def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0):
     captcha = ImageCaptcha()
@@ -142,7 +143,7 @@ def create_single_digit_model():
     h = dropout(h, 1-0.5)
     # output_layer = Dense(CLASS_COUNT, activation='softmax', name='out')(h)
     output_layer = fully_connected(h, CLASS_COUNT, activation='softmax')
-    network = regression(output_layer, optimizer='adadelta', learning_rate=0.01,
+    network = regression(output_layer, optimizer=OPTIMIZER, learning_rate=0.01,
                      loss='categorical_crossentropy', name='out')
     # model = Model(input_layer, output_layer)
     model = tflearn.DNN(network, tensorboard_verbose=3, tensorboard_dir='./logs/')
@@ -160,7 +161,7 @@ def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
         out_name = OUT_PUT_NAME_FORMAT % index
         # output = Dense(CLASS_COUNT, activation='softmax', name=out_name)(h)
         h = fully_connected(h, CLASS_COUNT, activation='softmax')
-        output = regression(h, optimizer='adadelta', learning_rate=0.01,
+        output = regression(h, optimizer=OPTIMIZER, learning_rate=0.01,
                      loss='categorical_crossentropy', name=out_name, op_name=out_name)
         outputs.append(output)
 

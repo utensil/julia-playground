@@ -67,8 +67,8 @@ OUT_PUT_NAME_FORMAT = 'out_%02d'
 NB_EPOCH = 10
 BATCH_SIZE = 128
 
-def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0):
-    captcha = ImageCaptcha()
+def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0, fonts=None):
+    captcha = ImageCaptcha(fonts=fonts) if fonts else ImageCaptcha()
 
     # print DIGIT_FORMAT_STR
     labels = []
@@ -118,8 +118,8 @@ def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_ind
     # y_test = y_test_as_num
     # return (x_train, y_train, x_test, y_test)
 
-def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
-    captcha = ImageCaptcha()
+def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE, fonts=None):
+    captcha = ImageCaptcha(fonts=fonts) if fonts else ImageCaptcha()
 
     # print DIGIT_FORMAT_STR
     labels = []
