@@ -35,7 +35,12 @@ CONV2_NB_FILTERS = IMAGE_STD_HEIGHT + 2 * 2
 OUT_PUT_NAME_FORMAT = 'out_%02d'
 NB_EPOCH = 10
 BATCH_SIZE = 128
-OPTIMIZER = 'adadelta' # 'adam' # 'adadelta'
+OPTIMIZER = tflearn.optimizers.AdaDelta(learning_rate=1.0, rho=0.95)
+# , epsilon=1e-08, use_locking=False, name='AdaDelta')# 'adam' # 'adadelta'
+# (lr=1.0, rho=0.95, epsilon=1e-08, decay=0.0)
+
+# This is the same as keras default glorot_normal
+INIT = tflearn.initializations.xavier(uniform=False) # , seed=None, dtype=tf.float32)
 
 def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0):
     captcha = ImageCaptcha()
@@ -114,20 +119,26 @@ def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE):
 
     return x, y
 
+def conv_2d_specialized(incoming, nb_filter, filter_size):
+    return conv_2d(incoming, nb_filter, filter_size,
+        padding='valid',
+        activation='relu',
+        weights_init=INIT) #, regularizer="L2")
+
 def create_cnn_layers():
     shape = [None, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT]
 
     # input_layer = Input(name='input', shape=shape)
     input_layer = input_data(name='input', shape=shape)
     # h = Convolution2D(22, 5, 5, activation='relu', dim_ordering=dim_ordering)(input_layer)
-    h = conv_2d(input_layer, 22, [5, 5], activation='relu', regularizer="L2")
+    h = conv_2d_specialized(input_layer, 22, [5, 5])
     POOL_SIZE = [2, 2]
     # h = MaxPooling2D(pool_size=POOL_SIZE)(h)
-    h = max_pool_2d(h, POOL_SIZE)
+    h = max_pool_2d(h, POOL_SIZE, padding='valid')
     # h = Convolution2D(44, 3, 3, activation='relu', dim_ordering=dim_ordering)(h)
-    h = conv_2d(h, 44, [3, 3], activation='relu', regularizer="L2")
+    h = conv_2d_specialized(h, 44, [3, 3])
     # h = MaxPooling2D(pool_size=POOL_SIZE)(h)
-    h = max_pool_2d(h, POOL_SIZE)
+    h = max_pool_2d(h, POOL_SIZE, padding='valid')
     # h = Dropout(0.25)(h)
     h = dropout(h, 1-0.25)
     # last_cnn_layer = Flatten()(h)
@@ -138,12 +149,13 @@ def create_single_digit_model():
     input_layer, last_cnn_layer = create_cnn_layers()
 
     # h = Dense(256, activation='relu')(last_cnn_layer)
-    h = fully_connected(last_cnn_layer, 256, activation='relu')
+    h = fully_connected(last_cnn_layer, 256, activation='relu', weights_init=INIT)
     # h = Dropout(0.5)(h)
     h = dropout(h, 1-0.5)
     # output_layer = Dense(CLASS_COUNT, activation='softmax', name='out')(h)
-    output_layer = fully_connected(h, CLASS_COUNT, activation='softmax')
-    network = regression(output_layer, optimizer=OPTIMIZER, learning_rate=0.01,
+    output_layer = fully_connected(h, CLASS_COUNT, activation='softmax', weights_init=INIT)
+    network = regression(output_layer, optimizer=OPTIMIZER,
+                     learning_rate=1.0,
                      loss='categorical_crossentropy', name='out')
     # model = Model(input_layer, output_layer)
     model = tflearn.DNN(network, tensorboard_verbose=3, tensorboard_dir='./logs/')
@@ -161,7 +173,7 @@ def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
         out_name = OUT_PUT_NAME_FORMAT % index
         # output = Dense(CLASS_COUNT, activation='softmax', name=out_name)(h)
         h = fully_connected(h, CLASS_COUNT, activation='softmax')
-        output = regression(h, optimizer=OPTIMIZER, learning_rate=0.01,
+        output = regression(h, optimizer=OPTIMIZER,
                      loss='categorical_crossentropy', name=out_name, op_name=out_name)
         outputs.append(output)
 
