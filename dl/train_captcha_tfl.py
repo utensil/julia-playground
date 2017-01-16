@@ -13,6 +13,7 @@ import tflearn
 from tflearn.layers.core import input_data, fully_connected, dropout, flatten
 from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.estimator import regression
+from tflearn.layers.normalization import local_response_normalization
 from tflearn.data_utils import to_categorical
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
@@ -135,10 +136,12 @@ def create_cnn_layers():
     POOL_SIZE = [2, 2]
     # h = MaxPooling2D(pool_size=POOL_SIZE)(h)
     h = max_pool_2d(h, POOL_SIZE, padding='valid')
+    h = local_response_normalization(h)
     # h = Convolution2D(44, 3, 3, activation='relu', dim_ordering=dim_ordering)(h)
     h = conv_2d_specialized(h, 44, [3, 3])
     # h = MaxPooling2D(pool_size=POOL_SIZE)(h)
     h = max_pool_2d(h, POOL_SIZE, padding='valid')
+    h = local_response_normalization(h)
     # h = Dropout(0.25)(h)
     h = dropout(h, 1-0.25)
     # last_cnn_layer = Flatten()(h)
@@ -155,7 +158,7 @@ def create_single_digit_model():
     # output_layer = Dense(CLASS_COUNT, activation='softmax', name='out')(h)
     output_layer = fully_connected(h, CLASS_COUNT, activation='softmax', weights_init=INIT)
     network = regression(output_layer, optimizer=OPTIMIZER,
-                     learning_rate=1.0,
+                     learning_rate=0.1,
                      loss='categorical_crossentropy', name='out')
     # model = Model(input_layer, output_layer)
     model = tflearn.DNN(network, tensorboard_verbose=3, tensorboard_dir='./logs/')
@@ -196,7 +199,7 @@ BANNER_BAR = '-----------------------------------'
 BANNER_BAR = '———————————————————————————————————'
 
 def train_single_digit_model(model, index):
-    save_model_file = 'model/one_%d.tflearn' % (index + 1)
+    save_model_file = 'model/one_norm_%d.tflearn' % (index + 1)
     train_sample_size = SAMPLE_SIZE
     test_sample_size = int(SAMPLE_SIZE * TEST_SAMPLE_RATE)
 
