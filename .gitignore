@@ -79,3 +79,5 @@ du.txt
 dl/logs*/
 .tags
 dl/fonts/
+dl/MNIST-data/
+dl/mnist/
