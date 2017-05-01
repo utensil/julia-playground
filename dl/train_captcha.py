@@ -9,12 +9,12 @@ import sys
 import PIL
 import numpy as np
 from numpy import argmax, array
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
 from keras.callbacks import Callback, ModelCheckpoint, TensorBoard
 from keras.models import Model
 from keras.utils import np_utils
-from keras.layers import merge, Convolution2D, MaxPooling2D, Input, Dense, Dropout, Flatten
-from keras.layers.convolutional import Convolution2D, MaxPooling2D
+from keras.layers import merge, Conv2D, MaxPooling2D, Input, Dense, Dropout, Flatten
+from keras.layers.convolutional import Conv2D, MaxPooling2D
 from keras import backend as K
 from captcha.image import ImageCaptcha,WheezyCaptcha
 
@@ -172,12 +172,12 @@ def generate_image_sets_for_multi_digits(nb_sample=SAMPLE_SIZE, fonts=None):
 
 def create_cnn_layers():
     shape = (RGB_COLOR_COUNT, IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH) if IS_TH else (IMAGE_STD_HEIGHT, IMAGE_STD_WIDTH, RGB_COLOR_COUNT)
-    dim_ordering = 'th' if IS_TH else 'tf'
+    data_format = 'channels_first' if IS_TH else 'channels_last'
 
     input_layer = Input(name='input', shape=shape)
-    h = Convolution2D(22, 5, 5, activation='relu', dim_ordering=dim_ordering)(input_layer)
+    h = Conv2D(22, (5, 5), activation='relu', data_format=data_format)(input_layer)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
-    h = Convolution2D(44, 3, 3, activation='relu', dim_ordering=dim_ordering)(h)
+    h = Conv2D(44, (3, 3), activation='relu', data_format=data_format)(h)
     h = MaxPooling2D(pool_size=POOL_SIZE)(h)
     h = Dropout(0.25)(h)
     last_cnn_layer = Flatten()(h)
@@ -190,7 +190,7 @@ def create_single_digit_model():
     h = Dropout(0.5)(h)
     output_layer = Dense(CLASS_COUNT, activation='softmax', name='out')(h)
 
-    model = Model(input_layer, output_layer)
+    model = Model(inputs=input_layer, outputs=output_layer)
 
     model.compile(
         optimizer='adadelta',
@@ -214,7 +214,7 @@ def create_multi_digit_model(model_file='', digit_count=DIGIT_COUNT):
         loss[out_name] = 'categorical_crossentropy'
         outputs.append(output)
 
-    model = Model(input=input_layer, output=outputs)
+    model = Model(inputs=input_layer, outputs=outputs)
     model.compile(
         optimizer='adadelta',
         loss=loss
@@ -268,9 +268,8 @@ def train_single_digit_model(model, index):
 
     model.fit_generator(
         gen(train_sample_size / NB_BATCH),
-        samples_per_epoch=train_sample_size,
-        # batch_size=BATCH_SIZE,
-        nb_epoch=NB_EPOCH,
+        steps_per_epoch=NB_BATCH,
+        epochs=NB_EPOCH,
         callbacks=callbacks
     )
 
@@ -331,9 +330,8 @@ def train_multi_digit_model(model, index):
 
     model.fit_generator(
         gen(train_sample_size / NB_BATCH),
-        samples_per_epoch=train_sample_size,
-        # batch_size=BATCH_SIZE,
-        nb_epoch=NB_EPOCH,
+        steps_per_epoch=NB_BATCH,
+        epochs=NB_EPOCH,
         callbacks=callbacks
     )
 
@@ -351,6 +349,8 @@ ARG_MODEL_INDEX_MAX = 3
 
 if len(sys.argv) > ARG_MODEL_TYPE:
     model_type = MODEL_TYPE_MULTIPLE if sys.argv[ARG_MODEL_TYPE] == MODEL_TYPE_MULTIPLE else MODEL_TYPE_SINGLE
+else:
+    model_type = MODEL_TYPE_SINGLE
 
 if len(sys.argv) > ARG_MODEL_INDEX:
     index = int(sys.argv[ARG_MODEL_INDEX])

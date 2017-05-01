@@ -81,3 +81,5 @@ dl/logs*/
 dl/fonts/
 dl/MNIST-data/
 dl/mnist/
+dl/deps.py
+dl/old_logs/
