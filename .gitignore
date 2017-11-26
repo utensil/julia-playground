@@ -83,3 +83,6 @@ dl/MNIST-data/
 dl/mnist/
 dl/deps.py
 dl/old_logs/
+dl/resnet-50*
+dl/vis_logs/events.out.tfevents.*
+gym/
