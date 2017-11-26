@@ -47,9 +47,29 @@ USE_PLOT = False
 plot = keras_plot if USE_PLOT else (lambda model, file_name: model)
 
 FONTS = glob.glob('/usr/share/fonts/truetype/dejavu/*.ttf')
-SAMPLE_SIZE = 20
-TEST_SAMPLE_RATE = 0.3
-NB_BATCH = 10
+
+if True:
+    # development
+    SAMPLE_SIZE = 120
+    TEST_SAMPLE_RATE = 0.3
+    NB_BATCH = 10
+    NB_EPOCH = 10
+    BATCH_SIZE = 128
+else:
+    # production
+    SAMPLE_SIZE = 10000
+    TEST_SAMPLE_RATE = 0.3
+    NB_BATCH = 100
+    NB_EPOCH = 10
+    BATCH_SIZE = 128
+
+# model.fit_generator(
+#     gen(train_sample_size / NB_BATCH),
+#     steps_per_epoch=NB_BATCH,
+#     epochs=NB_EPOCH,
+#     callbacks=callbacks
+# )
+
 SHOW_SAMPLE_SIZE = 5
 INVALID_DIGIT = -1
 DIGIT_COUNT = 4
@@ -64,8 +84,6 @@ IMAGE_STD_HEIGHT = 200
 CONV1_NB_FILTERS = IMAGE_STD_HEIGHT / 2 + 2
 CONV2_NB_FILTERS = IMAGE_STD_HEIGHT + 2 * 2
 OUT_PUT_NAME_FORMAT = 'out_%02d'
-NB_EPOCH = 10
-BATCH_SIZE = 128
 
 def generate_image_sets_for_single_digit(nb_sample=SAMPLE_SIZE, single_digit_index=0, fonts=None):
     captcha = ImageCaptcha(fonts=fonts) if fonts else ImageCaptcha()
