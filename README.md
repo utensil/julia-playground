@@ -33,30 +33,66 @@ sudo apt-get install julia
 # Just install from http://julialang.org/downloads/
 ```
 
+Start a Jupyter Notebook for Julia
+------------------------------------
+
 ```julia
+using Pkg
 Pkg.add("IJulia")
 using IJulia
 notebook()
 ```
 
+A more interesting way:
+
+```bash
+# Start Julia REPL
+$ julia
+julia>
+
+# Enter Pkg REPL-mode
+# Hit ]
+pkg> add IJulia
+
+# Back to Julia REPL
+# Hit Backspace
+julia>
+
+# Enter Shell mode or exit to shell
+# Hit ;
+shell> julia -e "using IJulia;notebook()"
+# or Enter exit()
+$ julia -e "using IJulia;notebook()"
+```
+
 Julia-Python bridge
 -----------------------------------------
 
-```julia
-julia> Pkg.add("PyCall")
-INFO: Initializing package repository /Users/utensil/.julia/v0.4
-INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
-# The first time takes a long time to do git clone......
-julia> using PyCall
-INFO: Precompiling module PyCall...
+```bash
+pkg> add PyCall
+  Updating registry at `~/.julia/registries/General`
+  Updating git-repo `https://github.com/JuliaRegistries/General.git`
+ Resolving package versions...
+ Installed MacroTools ─ v0.4.5
+ Installed PyCall ───── v1.90.0
+  Updating `~/.julia/environments/v1.1/Project.toml`
+  [438e738f] + PyCall v1.90.0
+  Updating `~/.julia/environments/v1.1/Manifest.toml`
+  [1914dd2f] + MacroTools v0.4.5
+  [438e738f] + PyCall v1.90.0
+  Building PyCall → `~/.julia/packages/PyCall/RQjD7/deps/build.log`
 
-julia> @pyimport numpy.random as nr
+julia> using PyCall
+[ Info: Precompiling PyCall [438e738f-606a-5dbb-bf0a-cddfbfd45ab0]
+
+julia> nr = pyimport("numpy.random")
+PyObject <module 'numpy.random' from '~/.julia/conda/3/lib/python3.7/site-packages/numpy/random/__init__.py'>
 
 julia> nr.rand(3,4)
-3x4 Array{Float64,2}:
- 0.104454  0.847609  0.810417  0.939161
- 0.266673  0.186059  0.651118  0.861648
- 0.720235  0.164573  0.448754  0.183331
+3×4 Array{Float64,2}:
+ 0.729467  0.404296  0.62498   0.239982
+ 0.229927  0.291334  0.793212  0.655154
+ 0.212725  0.715652  0.600691  0.985202
 ```
 
 Install most installed packages
