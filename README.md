@@ -40,7 +40,7 @@ Start a Jupyter Notebook for Julia
 using Pkg
 Pkg.add("IJulia")
 using IJulia
-notebook()
+notebook(dir=pwd())
 ```
 
 A more interesting way:
@@ -60,9 +60,9 @@ julia>
 
 # Enter Shell mode or exit to shell
 # Hit ;
-shell> julia -e "using IJulia;notebook()"
+shell> julia -e "using IJulia;notebook(dir=pwd())"
 # or Enter exit()
-$ julia -e "using IJulia;notebook()"
+$ julia -e "using IJulia;notebook(dir=pwd())"
 ```
 
 Julia-Python bridge
