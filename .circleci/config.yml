@@ -1,0 +1,50 @@
+version: 2.0
+
+defaults: &defaults
+  working_directory: ~/julia-playground
+  steps:
+    - checkout
+    - run:
+        name: Install
+        command: |
+          sudo pip install pytest
+          sudo pip install sympy==1.3
+          sudo pip install galgebra
+          sudo pip install clifford
+          if [[ "$CIRCLE_JOB" == "python-2.7" ]]; then sudo pip install ipython==5.8.0 ; fi
+          sudo pip install nbval
+          sudo pip install pytest-xdist
+    - run:
+        name: Test
+        command: |
+          # pytest -n 2 --dist loadscope --nbval --current-env --sanitize-with .nbval_sanitize.cfg py/LAGA.ipynb
+          pytest --nbval --current-env --sanitize-with .nbval_sanitize.cfg py/LAGA.ipynb py/CGA-galgebra.ipynb
+          # pytest --nbval --sanitize-with .nbval_sanitize.cfg packages/GAlgebra.jl.ipynb
+jobs:
+  "python-3.7":
+    <<: *defaults
+    docker:
+      - image: circleci/python:3.7
+  # "python-3.6":
+  #   <<: *defaults
+  #   docker:
+  #     - image: circleci/python:3.6
+  # "python-3.5":
+  #   <<: *defaults
+  #   docker:
+  #     - image: circleci/python:3.5
+  # "python-3.4":
+  #   <<: *defaults
+  #   docker:
+  #     - image: circleci/python:3.4
+  "python-2.7":
+    <<: *defaults
+    docker:
+      - image: circleci/python:2.7
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - "python-3.7"
+      - "python-2.7"
