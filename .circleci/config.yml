@@ -18,7 +18,7 @@ defaults: &defaults
         name: Test
         command: |
           # pytest -n 2 --dist loadscope --nbval --current-env --sanitize-with .nbval_sanitize.cfg py/LAGA.ipynb
-          pytest --nbval --current-env --sanitize-with .nbval_sanitize.cfg py/LAGA.ipynb py/CGA-galgebra.ipynb
+          if [[ "$CIRCLE_JOB" == "python-3.7" ]]; then pytest --nbval --current-env --sanitize-with .nbval_sanitize.cfg py/LAGA.ipynb py/CGA-galgebra.ipynb ; fi
           # pytest --nbval --sanitize-with .nbval_sanitize.cfg packages/GAlgebra.jl.ipynb
 jobs:
   "python-3.7":
